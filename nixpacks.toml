@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["chromium", "nss", "nspr", "atk", "cups", "dbus", "expat", "libdrm", "libxkbcommon", "mesa", "libgbm", "pango", "cairo", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "xorg.libxcb"]
+
+[phases.install]
+cmds = ["npm ci", "npx playwright install chromium --with-deps || true"]
+
+[start]
+cmd = "npx tsx lib/worker/index.ts"
