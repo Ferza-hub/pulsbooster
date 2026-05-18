@@ -1,4 +1,4 @@
-import type { Proxy } from '@/types'
+import type { Proxy } from '../../types/index.js'
 
 // Load proxy pool from env
 function loadProxies(): Proxy[] {

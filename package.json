@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "worker": "node lib/worker/index.mjs",
+    "worker": "tsx lib/worker/index.ts",
     "lint": "next lint"
   },
   "dependencies": {
@@ -29,6 +29,7 @@
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
+    "tsx": "^4.15.0",
     "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",

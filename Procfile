@@ -1,2 +1,2 @@
 web: next start
-worker: node lib/worker/index.mjs
+worker: npx tsx lib/worker/index.ts
