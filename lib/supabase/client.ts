@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { RealtimeClient } from '@supabase/realtime-js'
 import WebSocket from 'ws'
 
 if (typeof globalThis.WebSocket === 'undefined') {
@@ -7,7 +8,10 @@ if (typeof globalThis.WebSocket === 'undefined') {
 
 const wsOptions = {
   global: { fetch: fetch as any },
-  realtime: { transport: WebSocket as any },
+  realtime: {
+    transport: WebSocket as any,
+    client: (url: string) => new RealtimeClient(url, { transport: WebSocket as any }) as any,
+  } as any,
 }
 
 // Server-side client (service role)

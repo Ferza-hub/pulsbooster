@@ -4,6 +4,7 @@
 
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
+import { RealtimeClient } from '@supabase/realtime-js'
 import WebSocket from 'ws'
 import { Redis } from '@upstash/redis'
 import { webSession } from '../platforms/web.js'
@@ -24,7 +25,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!,
   {
     global: { fetch: fetch as any },
-    realtime: { transport: WebSocket as any },
+    realtime: {
+      transport: WebSocket as any,
+      client: (url: string) => new RealtimeClient(url, { transport: WebSocket as any }) as any,
+    } as any,
   }
 )
 
