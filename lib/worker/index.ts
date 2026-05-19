@@ -4,14 +4,24 @@
 
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
+import WebSocket from 'ws'
 import { Redis } from '@upstash/redis'
 import { webSession } from '../platforms/web.js'
 import { getProxy, markUsed, markFailed, resetDailyCaps } from '../proxy/manager.js'
 import { isActiveHour, sessionsThisHour, sessionDelay } from '../scheduler/index.js'
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.API_URL ?? process.env.APP_URL
+if (!appUrl) {
+  console.warn('⚠️  Public app URL not set. Set NEXT_PUBLIC_APP_URL, API_URL, or APP_URL in the worker environment.')
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
+  process.env.SUPABASE_SERVICE_KEY!,
+  {
+    global: { fetch: fetch as any },
+    realtime: { transport: WebSocket as any },
+  }
 )
 
 const redis = new Redis({
