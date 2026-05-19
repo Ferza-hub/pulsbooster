@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/client'
 import { Redis } from '@upstash/redis'
 import { campaignDay, dailyTargetForDay } from '@/lib/scheduler'
-import { v4 as uuid } from 'uuid'
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   if (!url) return NextResponse.json({ error: 'url required' }, { status: 400 })
 
-  const campaignId = uuid()
+  const campaignId = crypto.randomUUID()
 
   const { error } = await supabaseAdmin.from('campaigns').insert({
     id: campaignId,
@@ -98,7 +97,7 @@ async function queueDailyOrder(
 ) {
   const day = 1
   const target = dailyTargetForDay(day, 5000)
-  const orderId = uuid()
+  const orderId = crypto.randomUUID()
 
   await supabaseAdmin.from('orders').insert({
     id: orderId,
