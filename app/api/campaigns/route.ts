@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/client'
 import { Redis } from '@upstash/redis'
 import { campaignDay, dailyTargetForDay } from '@/lib/scheduler'
+import type { Campaign } from '@/types'
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Enrich with current phase and daily target
-  const enriched = data.map(c => {
+  const enriched = (data as Campaign[]).map((c: Campaign) => {
     const day = campaignDay(c.created_at)
     const phase = c.phase_schedule
     const target = dailyTargetForDay(day, c.daily_target)
@@ -82,9 +83,55 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Create first order and queue it
-  await queueDailyOrder(campaignId, platform, url, action, geo, warmup_days)
+  await queueDailyOrder(campaignId, platform, url, action, geo, daily_target, warmup_days)
 
   return NextResponse.json({ id: campaignId, status: 'created' })
+}
+
+// PATCH /api/campaigns?id=<campaignId> - update campaign
+export async function PATCH(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const campaignId = searchParams.get('id')
+
+  if (!campaignId) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const body = await req.json()
+  const updates: Record<string, any> = {}
+
+  if ('active' in body) updates.active = body.active
+  if ('daily_target' in body) updates.daily_target = body.daily_target
+  if ('name' in body) updates.name = body.name
+  if ('phase' in body) updates.phase = body.phase
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'no updates provided' }, { status: 400 })
+  }
+
+  const { error } = await supabaseAdmin
+    .from('campaigns')
+    .update(updates)
+    .eq('id', campaignId)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ id: campaignId, updated: updates })
+}
+
+// DELETE /api/campaigns?id=<campaignId> - pause campaign
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const campaignId = searchParams.get('id')
+
+  if (!campaignId) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { error } = await supabaseAdmin
+    .from('campaigns')
+    .update({ active: false })
+    .eq('id', campaignId)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ id: campaignId, status: 'paused' })
 }
 
 async function queueDailyOrder(
@@ -93,28 +140,35 @@ async function queueDailyOrder(
   url: string,
   action: string,
   geo: string,
+  maxTarget: number,
   warmupDays: number
 ) {
   const day = 1
-  const target = dailyTargetForDay(day, 5000)
+  const target = dailyTargetForDay(day, maxTarget)
   const orderId = crypto.randomUUID()
 
-  await supabaseAdmin.from('orders').insert({
-    id: orderId,
-    campaign_id: campaignId,
-    platform,
-    url,
-    action,
-    quantity: target,
-    delivered: 0,
-    failed: 0,
-    geo,
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  })
+  try {
+    await supabaseAdmin.from('orders').insert({
+      id: orderId,
+      campaign_id: campaignId,
+      platform,
+      url,
+      action,
+      quantity: target,
+      delivered: 0,
+      failed: 0,
+      geo,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    })
 
-  // Push to Upstash Redis queue
-  await redis.rpush(QUEUE_KEY, orderId)
+    // Push to Upstash Redis queue
+    await redis.rpush(QUEUE_KEY, orderId)
+    console.log(`✅ Order queued: ${orderId} qty=${target}`)
+  } catch (err) {
+    console.error(`❌ Failed to queue order: ${err}`)
+    throw err
+  }
 }
 
 function getCurrentPhase(

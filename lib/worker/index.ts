@@ -39,9 +39,41 @@ const redis = new Redis({
 
 const QUEUE_KEY = 'pb:queue:orders'
 const PROCESSING_KEY = 'pb:processing'
+const HEALTH_KEY = 'pb:worker:health'
 
 console.log('🚀 PulseBooster Worker started')
 console.log(`📍 Active hours: 08:00 - 23:00`)
+
+// Startup checks
+async function healthCheck() {
+  try {
+    // Test Redis
+    await redis.set('pb:ping', Date.now(), { ex: 10 })
+    const pingVal = await redis.get('pb:ping')
+    if (!pingVal) throw new Error('Redis set/get failed')
+    console.log('✅ Redis connected')
+
+    // Test Supabase
+    const { error } = await supabase.from('campaigns').select('id').limit(1)
+    if (error) throw error
+    console.log('✅ Supabase connected')
+
+    // Update worker status
+    await redis.set(HEALTH_KEY, JSON.stringify({
+      started: new Date().toISOString(),
+      status: 'healthy',
+      ordersProcessed: 0,
+    }), { ex: 600 })
+
+    return true
+  } catch (err) {
+    console.error('❌ Health check failed:', err)
+    return false
+  }
+}
+
+// Run health check before starting
+await healthCheck()
 
 // Reset daily caps at midnight
 setInterval(() => {
@@ -55,10 +87,12 @@ setInterval(() => {
 
 // Main loop
 async function processLoop() {
+  let consecutiveErrors = 0
+  
   while (true) {
     try {
       if (!isActiveHour()) {
-        console.log('😴 Outside active hours, waiting...')
+        console.log('😴 Outside active hours (8-23), waiting...')
         await sleep(30 * 60 * 1000) // wait 30 min
         continue
       }
@@ -71,14 +105,32 @@ async function processLoop() {
         continue
       }
 
-      // Get order from DB
-      const { data: order } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single()
+      console.log(`📥 Got order from queue: ${orderId}`)
 
-      if (!order || order.status === 'paused') {
+      // Get order from DB
+      let order: any
+      try {
+        const { data } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .single()
+        
+        if (!data) {
+          console.error(`❌ Order not found: ${orderId}`)
+          continue
+        }
+        
+        order = data
+      } catch (err) {
+        console.error(`❌ DB error fetching order ${orderId}:`, err)
+        // Re-queue the order
+        await redis.rpush(QUEUE_KEY, orderId)
+        continue
+      }
+
+      if (order.status === 'paused') {
+        console.log(`⏸️  Order paused, skipping: ${orderId}`)
         continue
       }
 
@@ -94,38 +146,58 @@ async function processLoop() {
       const remaining = order.quantity - delivered
 
       for (let i = 0; i < remaining; i++) {
-        if (!isActiveHour()) break
+        if (!isActiveHour()) {
+          console.log(`⏸️  Active hours ended, pausing order ${orderId} at ${delivered}/${order.quantity}`)
+          break
+        }
 
-        const proxy = getProxy(order.geo, order.platform)
+        let proxy: any
+        try {
+          proxy = getProxy(order.geo, order.platform)
+        } catch (err) {
+          console.error(`⚠️  Proxy manager error:`, err)
+          failed++
+          continue
+        }
 
         let result: any = { success: false }
 
-        // Route to correct platform
-        if (order.platform === 'web') {
-          result = await webSession({
-            url: order.url,
-            type: order.action,
-            proxy,
-            geo: order.geo,
-          })
-        }
-        // Add other platforms here as needed
+        try {
+          // Route to correct platform
+          if (order.platform === 'web') {
+            result = await webSession({
+              url: order.url,
+              type: order.action,
+              proxy,
+              geo: order.geo,
+            })
+          }
 
-        if (result.success) {
-          delivered++
-          if (proxy) markUsed(proxy)
-        } else {
+          if (result.success) {
+            delivered++
+            if (proxy) markUsed(proxy)
+            if (i % 50 === 0) console.log(`📈 Progress: ${delivered}/${order.quantity}`)
+          } else {
+            failed++
+            if (proxy) markFailed(proxy)
+          }
+        } catch (err) {
+          console.error(`❌ Session error (${i}/${remaining}):`, err)
           failed++
           if (proxy) markFailed(proxy)
         }
 
         // Update progress every 10 sessions
         if (i % 10 === 0) {
-          await supabase.from('orders').update({
-            delivered,
-            failed,
-            updated_at: new Date().toISOString(),
-          }).eq('id', orderId)
+          try {
+            await supabase.from('orders').update({
+              delivered,
+              failed,
+              updated_at: new Date().toISOString(),
+            }).eq('id', orderId)
+          } catch (err) {
+            console.error(`⚠️  DB update error:`, err)
+          }
         }
 
         // Natural delay between sessions
@@ -137,26 +209,40 @@ async function processLoop() {
 
       // Final update
       const status = failed > 0 && delivered === 0 ? 'failed' : 'completed'
-      await supabase.from('orders').update({
-        delivered,
-        failed,
-        status,
-        updated_at: new Date().toISOString(),
-      }).eq('id', orderId)
+      try {
+        await supabase.from('orders').update({
+          delivered,
+          failed,
+          status,
+          updated_at: new Date().toISOString(),
+        }).eq('id', orderId)
 
-      // Update campaign delivered count
-      if (order.campaign_id) {
-        await supabase.rpc('increment_campaign_delivered', {
-          campaign_id: order.campaign_id,
-          amount: delivered,
-        })
+        // Update campaign delivered count
+        if (order.campaign_id) {
+          await supabase.rpc('increment_campaign_delivered', {
+            campaign_id: order.campaign_id,
+            amount: delivered,
+          })
+        }
+      } catch (err) {
+        console.error(`❌ Final DB update failed for ${orderId}:`, err)
       }
 
       await redis.del(`${PROCESSING_KEY}:${orderId}`)
-      console.log(`✅ Order ${orderId} done: ${delivered}/${order.quantity} delivered`)
+      console.log(`✅ Order ${orderId} done: ${delivered}/${order.quantity} delivered, ${failed} failed`)
+      
+      // Reset error counter on success
+      consecutiveErrors = 0
 
     } catch (err) {
-      console.error('Worker error:', err)
+      consecutiveErrors++
+      console.error(`Worker error [${consecutiveErrors}/5]:`, err)
+      
+      if (consecutiveErrors >= 5) {
+        console.error('🔴 Too many consecutive errors, worker stopping')
+        process.exit(1)
+      }
+      
       await sleep(5000)
     }
   }
