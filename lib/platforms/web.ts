@@ -92,14 +92,14 @@ export async function webSession({
       },
     })
 
-    // Stealth
-    await context.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false })
-      (window as any).chrome = { runtime: {} }
+    // Stealth — passed as string to avoid TS type-checking browser globals
+    await context.addInitScript(`
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      window.chrome = { runtime: {} };
       Object.defineProperty(navigator, 'plugins', {
         get: () => [{ name: 'Chrome PDF Plugin' }],
-      })
-    })
+      });
+    `)
 
     const page = await context.newPage()
 
