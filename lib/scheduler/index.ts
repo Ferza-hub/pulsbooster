@@ -1,4 +1,4 @@
-import { RAMP_SCHEDULE } from '../../types/index.js'
+import { RAMP_SCHEDULE } from '@/types'
 
 // Active delivery hours: 8am - 11pm
 export function isActiveHour(): boolean {
