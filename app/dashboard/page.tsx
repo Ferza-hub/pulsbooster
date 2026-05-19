@@ -64,206 +64,244 @@ export default function Dashboard() {
 
   const totalDelivered = campaigns.reduce((a, c) => a + (c.total_delivered || 0), 0)
   const activeCampaigns = campaigns.filter(c => c.active).length
+  const pausedCampaigns = campaigns.filter(c => !c.active).length
+  const todayTarget = campaigns.reduce((a, c) => a + (c.today_target || 0), 0)
+  const proxyTotal = health?.proxy?.total || 0
+  const proxyAvailable = Object.values(health?.proxy?.byGeo || {}).reduce((sum, stats: any) => sum + (stats.available || 0), 0) as number
+  const proxyHealth = proxyTotal ? Math.round((proxyAvailable / proxyTotal) * 100) : 0
+  const workerStable = health ? health.activeHour && proxyAvailable > 0 : false
+  const workerStatusLabel = health ? (workerStable ? 'Stable' : 'Needs attention') : 'Unknown'
+  const workerStatusColor = workerStable ? 'text-green' : 'text-amber'
+  const lastUpdated = health?.time ? new Date(health.time).toLocaleTimeString() : 'Pending'
 
   return (
     <div className="min-h-screen bg-bg text-white font-sans">
-      {/* Google Fonts */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap')`}</style>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="font-mono text-xs text-accent tracking-widest mb-2">PULSEBOOSTER CONTROL</div>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Performance dashboard</h1>
+            <p className="max-w-2xl mt-3 text-sm text-dim">Monitor active campaigns, worker health, proxy availability and the next UX roadmap in one clean view.</p>
+          </div>
 
-      {/* Header */}
-      <div className="border-b border-white/5 px-6 py-4 flex justify-between items-center">
-        <div>
-          <div className="font-mono text-xs text-accent tracking-widest">PULSEBOOSTER</div>
-          <div className="font-mono text-xs text-dim mt-1">
-            {health?.activeHour ? '● ACTIVE' : '○ INACTIVE'} ·{' '}
-            {health?.proxy?.total || 0} IP ·{' '}
-            {new Date().toLocaleTimeString()}
+          <div className="flex flex-wrap gap-3">
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono uppercase tracking-[0.2em] text-blue">Live update</span>
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono uppercase tracking-[0.2em] text-accent">Team-ready</span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="font-mono text-xs text-muted">TOTAL DELIVERED</div>
-          <div className="font-mono text-xl text-accent">{totalDelivered.toLocaleString()}</div>
-        </div>
-      </div>
 
-      <div className="px-6 py-6 max-w-2xl mx-auto">
-
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { label: 'Active', val: activeCampaigns, color: 'text-accent' },
-            { label: 'IPs', val: health?.proxy?.total || 0, color: 'text-blue' },
-            { label: 'Sessions Today', val: campaigns.reduce((a, c) => a + (c.today_target || 0), 0).toLocaleString(), color: 'text-purple' },
-          ].map(s => (
-            <div key={s.label} className="bg-surface border border-white/5 rounded-xl p-4 text-center">
-              <div className={`font-mono text-xl font-bold ${s.color}`}>{s.val}</div>
-              <div className="font-mono text-xs text-dim mt-1 uppercase tracking-wider">{s.label}</div>
+        <div className="grid gap-5 xl:grid-cols-[1.8fr_0.95fr] xl:items-start mt-8">
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                { label: 'Running campaigns', value: activeCampaigns, tone: 'text-accent' },
+                { label: 'Paused campaigns', value: pausedCampaigns, tone: 'text-muted' },
+                { label: 'Proxy health', value: `${proxyHealth}%`, tone: proxyHealth > 65 ? 'text-green' : 'text-amber' },
+              ].map(item => (
+                <div key={item.label} className="rounded-3xl border border-white/5 bg-surface p-5 shadow-sm">
+                  <div className={`text-3xl font-semibold ${item.tone}`}>{item.value}</div>
+                  <div className="mt-2 text-xs uppercase tracking-[0.25em] text-dim font-mono">{item.label}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Ramp chart */}
-        <div className="bg-surface border border-white/5 rounded-xl p-4 mb-6">
-          <div className="font-mono text-xs text-dim tracking-widest mb-4">DELIVERY RAMP SCHEDULE</div>
-          <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={RAMP_DATA}>
-              <XAxis dataKey="day" tick={{ fill: '#3f3f46', fontSize: 10 }} tickLine={false} />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{ background: '#111113', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, fontSize: 11 }}
-                formatter={(v: any) => [`${v.toLocaleString()} sessions`, 'Target']}
-              />
-              <Line type="monotone" dataKey="sessions" stroke="#a3e635" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="flex gap-4 mt-2 text-xs font-mono text-dim">
-            <span className="text-blue">Day 1-7: Warmup (no ads)</span>
-            <span className="text-accent">Day 8+: Add ads platforms</span>
+            <div className="rounded-3xl border border-white/5 bg-surface p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-dim font-mono">Worker status</div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className={`h-3.5 w-3.5 rounded-full ${workerStable ? 'bg-green' : 'bg-amber'}`} />
+                    <div className="text-lg font-semibold">{workerStatusLabel}</div>
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-white/5 px-3 py-2 text-xs font-mono uppercase tracking-[0.18em] text-dim">Last refresh: {lastUpdated}</div>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-dim font-mono">Active window</div>
+                  <div className="mt-2 text-xl font-semibold">{health?.activeHour ? 'Open' : 'Closed'}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-dim font-mono">Available proxies</div>
+                  <div className="mt-2 text-xl font-semibold">{proxyAvailable}/{proxyTotal}</div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-amber/20 bg-amber/5 p-4 text-sm text-amber">
+                Runtime note: Node 20 compatibility requires manual <span className="font-semibold text-white">ws</span> transport wiring. For a stronger stack, Node.js 22+ upgrade is recommended.
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/5 bg-surface p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-dim font-mono">UX roadmap</div>
+                  <div className="mt-2 text-lg font-semibold">Upgrade plan</div>
+                </div>
+                <div className="rounded-full bg-blue/10 px-3 py-1 text-xs text-blue uppercase tracking-[0.18em]">priority</div>
+              </div>
+
+              <ul className="mt-5 space-y-3 text-sm text-dim list-inside list-disc font-sans">
+                <li>Expose worker health and queue status directly on dashboard.</li>
+                <li>Show campaign progress pipeline with current phase and runtime alerts.</li>
+                <li>Add clear Node runtime compatibility warnings for deployment.</li>
+                <li>Improve mobile layout, filters, and campaign search.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <div className="rounded-3xl border border-white/5 bg-surface p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-dim font-mono">Campaign activity</div>
+                  <div className="mt-2 text-2xl font-semibold">{campaigns.length} total campaigns</div>
+                </div>
+                <div className="rounded-2xl bg-white/5 px-3 py-2 text-xs font-mono uppercase tracking-[0.18em] text-accent">{activeCampaigns} active</div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-dim font-mono">Delivered total</div>
+                  <div className="mt-3 text-xl font-semibold">{totalDelivered.toLocaleString()}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-dim font-mono">Daily target</div>
+                  <div className="mt-3 text-xl font-semibold">{todayTarget.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/5 bg-surface p-6 shadow-sm">
+              <div className="font-mono text-xs text-dim tracking-widest mb-4">NEW CAMPAIGN</div>
+              <div className="flex flex-col gap-3">
+                <input
+                  placeholder="Campaign name"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none focus:border-accent/40 transition placeholder:text-dim text-white"
+                />
+                <input
+                  placeholder="Target URL (https://yourblog.com)"
+                  value={form.url}
+                  onChange={e => setForm({ ...form, url: e.target.value })}
+                  className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none focus:border-accent/40 transition placeholder:text-dim text-white"
+                />
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select
+                    value={form.action}
+                    onChange={e => setForm({ ...form, action: e.target.value })}
+                    className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none text-white"
+                  >
+                    <option value="google_traffic">Google Traffic</option>
+                    <option value="social_traffic">Social Traffic</option>
+                    <option value="mixed_traffic">Mixed Traffic</option>
+                  </select>
+                  <select
+                    value={form.geo}
+                    onChange={e => setForm({ ...form, geo: e.target.value })}
+                    className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none text-white"
+                  >
+                    <option value="US">🇺🇸 USA</option>
+                    <option value="GB">🇬🇧 UK</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="font-mono text-xs text-dim mb-1">MAX DAILY TARGET</div>
+                    <input
+                      type="number"
+                      value={form.daily_target}
+                      onChange={e => setForm({ ...form, daily_target: parseInt(e.target.value) })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none text-white"
+                    />
+                  </div>
+                  <div>
+                    <div className="font-mono text-xs text-dim mb-1">WARMUP DAYS</div>
+                    <input
+                      type="number"
+                      value={form.warmup_days}
+                      onChange={e => setForm({ ...form, warmup_days: parseInt(e.target.value) })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none text-white"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={createCampaign}
+                  disabled={creating || !form.url}
+                  className="w-full rounded-2xl bg-accent px-5 py-3 text-sm font-bold text-black uppercase tracking-[0.18em] disabled:opacity-40 transition hover:opacity-90"
+                >
+                  {creating ? 'CREATING...' : 'LAUNCH CAMPAIGN'}
+                </button>
+
+                <div className="font-mono text-xs text-dim text-center">Warmup {form.warmup_days} days → Add ads day {form.warmup_days + 1}</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Campaigns */}
-        <div className="mb-6">
-          <div className="font-mono text-xs text-dim tracking-widest mb-3">CAMPAIGNS</div>
-          {loading && <div className="text-muted text-sm">Loading...</div>}
-          {!loading && campaigns.length === 0 && (
-            <div className="text-center py-8 text-dim text-sm">No campaigns yet</div>
-          )}
-          <div className="flex flex-col gap-3">
+        <div className="mt-6 rounded-3xl border border-white/5 bg-surface p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5 gap-3">
+            <div>
+              <div className="font-mono text-xs text-dim tracking-widest">CAMPAIGN PIPELINE</div>
+              <div className="mt-2 text-lg font-semibold">Active campaigns overview</div>
+            </div>
+            <div className="text-xs text-dim font-mono">{campaigns.length} campaigns</div>
+          </div>
+
+          {loading && <div className="text-sm text-dim">Loading campaign data...</div>}
+          {!loading && campaigns.length === 0 && <div className="text-sm text-dim">No campaigns available.</div>}
+
+          <div className="space-y-4">
             {campaigns.map(c => {
               const phase = PHASE_LABELS[c.current_phase] || PHASE_LABELS.warmup
               return (
-                <div key={c.id} className="bg-surface border border-white/5 rounded-xl p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="text-sm font-medium">{c.name}</div>
-                      <div className="text-xs text-muted mt-1 truncate max-w-[200px]">{c.url}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono text-xs" style={{ color: phase.color }}>
-                        DAY {c.current_day}
+                <div key={c.id} className="rounded-3xl border border-white/5 bg-white/5 p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold truncate">{c.name}</div>
+                        <span className={`rounded-full px-3 py-1 text-[11px] font-mono uppercase tracking-[0.2em] ${c.active ? 'bg-green/10 text-green' : 'bg-muted/20 text-muted'}`}>
+                          {c.active ? 'Active' : 'Paused'}
+                        </span>
                       </div>
-                      <div className="font-mono text-xs text-dim mt-1">{phase.label}</div>
+                      <div className="mt-2 text-xs text-dim truncate">{c.url}</div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 text-right">
+                      <div className="text-xs uppercase tracking-[0.2em] text-dim font-mono">Phase</div>
+                      <div className="text-sm font-semibold" style={{ color: phase.color }}>{phase.label}</div>
+                      <div className="text-xs text-dim">Day {c.current_day}</div>
                     </div>
                   </div>
 
-                  {/* Progress */}
-                  <div className="mb-2">
-                    <div className="flex justify-between text-xs text-dim mb-1 font-mono">
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-dim mb-2 font-mono">
                       <span>{(c.total_delivered || 0).toLocaleString()} delivered</span>
                       <span>Today: {(c.today_target || 0).toLocaleString()}</span>
                     </div>
-                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                       <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(((c.total_delivered || 0) / (c.daily_target * 30)) * 100, 100)}%`,
-                          background: phase.color,
-                        }}
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.min(((c.total_delivered || 0) / (c.daily_target * 30)) * 100, 100)}%`, background: phase.color }}
                       />
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-3">
-                    <span className="font-mono text-xs px-2 py-1 rounded bg-white/4 text-muted">{c.platform}</span>
-                    <span className="font-mono text-xs px-2 py-1 rounded bg-white/4 text-muted">{c.geo}</span>
-                    <span className="font-mono text-xs px-2 py-1 rounded bg-white/4 text-muted">{c.action}</span>
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-dim font-mono">
+                    <span className="rounded-full bg-white/5 px-2 py-1">{c.platform}</span>
+                    <span className="rounded-full bg-white/5 px-2 py-1">{c.geo}</span>
+                    <span className="rounded-full bg-white/5 px-2 py-1">{c.action}</span>
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-
-        {/* New Campaign Form */}
-        <div className="bg-surface border border-white/5 rounded-xl p-4">
-          <div className="font-mono text-xs text-dim tracking-widest mb-4">NEW CAMPAIGN</div>
-
-          <div className="flex flex-col gap-3">
-            <input
-              placeholder="Campaign name"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              className="bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none focus:border-accent/40 transition placeholder:text-dim text-white"
-            />
-            <input
-              placeholder="Target URL (https://yourblog.com)"
-              value={form.url}
-              onChange={e => setForm({ ...form, url: e.target.value })}
-              className="bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none focus:border-accent/40 transition placeholder:text-dim text-white"
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                value={form.action}
-                onChange={e => setForm({ ...form, action: e.target.value })}
-                className="bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none text-white"
-              >
-                <option value="google_traffic">Google Traffic</option>
-                <option value="social_traffic">Social Traffic</option>
-                <option value="mixed_traffic">Mixed Traffic</option>
-              </select>
-
-              <select
-                value={form.geo}
-                onChange={e => setForm({ ...form, geo: e.target.value })}
-                className="bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none text-white"
-              >
-                <option value="US">🇺🇸 USA</option>
-                <option value="GB">🇬🇧 UK</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="font-mono text-xs text-dim mb-1">MAX DAILY TARGET</div>
-                <input
-                  type="number"
-                  value={form.daily_target}
-                  onChange={e => setForm({ ...form, daily_target: parseInt(e.target.value) })}
-                  className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none text-white"
-                />
-              </div>
-              <div>
-                <div className="font-mono text-xs text-dim mb-1">WARMUP DAYS</div>
-                <input
-                  type="number"
-                  value={form.warmup_days}
-                  onChange={e => setForm({ ...form, warmup_days: parseInt(e.target.value) })}
-                  className="w-full bg-white/4 border border-white/8 rounded-lg px-3 py-2 text-sm outline-none text-white"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={createCampaign}
-              disabled={creating || !form.url}
-              className="w-full py-3 bg-accent text-black font-mono font-bold text-sm rounded-xl tracking-widest disabled:opacity-40 transition hover:opacity-90"
-            >
-              {creating ? 'CREATING...' : 'LAUNCH CAMPAIGN →'}
-            </button>
-
-            <div className="font-mono text-xs text-dim text-center">
-              Warmup {form.warmup_days} days → Add ads day {form.warmup_days + 1}
-            </div>
-          </div>
-        </div>
-
-        {/* Proxy status */}
-        {health?.proxy?.byGeo && (
-          <div className="mt-4 bg-surface border border-white/5 rounded-xl p-4">
-            <div className="font-mono text-xs text-dim tracking-widest mb-3">PROXY STATUS</div>
-            <div className="flex flex-col gap-2">
-              {Object.entries(health.proxy.byGeo).map(([geo, stats]: any) => (
-                <div key={geo} className="flex justify-between items-center">
-                  <span className="font-mono text-xs text-muted">🌍 {geo}</span>
-                  <span className="font-mono text-xs text-accent">{stats.available}/{stats.total} available</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   )
