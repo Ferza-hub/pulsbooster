@@ -95,7 +95,7 @@ export async function webSession({
     // Stealth
     await context.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => false })
-      window.chrome = { runtime: {} } as any
+      (window as any).chrome = { runtime: {} }
       Object.defineProperty(navigator, 'plugins', {
         get: () => [{ name: 'Chrome PDF Plugin' }],
       })
