@@ -10,14 +10,33 @@
   padding: 0;
 }
 
+html, body, #__next {
+  min-height: 100%;
+}
+
 body {
-  background: #09090b;
+  background: radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 25%),
+    radial-gradient(circle at 10% 15%, rgba(163, 230, 53, 0.12), transparent 20%),
+    linear-gradient(180deg, #09090b 0%, #060608 100%);
   color: #e4e4e7;
   font-family: 'DM Sans', sans-serif;
 }
 
+::selection {
+  background: rgba(163, 230, 53, 0.24);
+  color: #ffffff;
+}
+
 ::-webkit-scrollbar {
   display: none;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 input, select {
@@ -25,5 +44,17 @@ input, select {
 }
 
 input::placeholder {
-  color: #3f3f46;
+  color: #71717a;
+}
+
+.glass-card {
+  @apply rounded-3xl border border-white/10 bg-white/5 shadow-[0_30px_90px_-45px_rgba(0,0,0,0.65)] backdrop-blur-xl;
+}
+
+.panel-pill {
+  @apply inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.22em] text-dim;
+}
+
+.panel-section {
+  @apply rounded-3xl border border-white/10 bg-surface/90 p-6;
 }
