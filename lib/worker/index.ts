@@ -10,6 +10,10 @@ import { webSession } from '../platforms/web.js'
 import { getProxy, markUsed, markFailed, resetDailyCaps } from '../proxy/manager.js'
 import { isActiveHour, sessionsThisHour, sessionDelay } from '../scheduler/index.js'
 
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = WebSocket as any
+}
+
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.API_URL ?? process.env.APP_URL
 if (!appUrl) {
   console.warn('⚠️  Public app URL not set. Set NEXT_PUBLIC_APP_URL, API_URL, or APP_URL in the worker environment.')

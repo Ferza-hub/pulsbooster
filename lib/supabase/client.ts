@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
 
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = WebSocket as any
+}
+
 const wsOptions = {
   global: { fetch: fetch as any },
   realtime: { transport: WebSocket as any },
